@@ -71,10 +71,10 @@ void *send_message(void* arg)
 			close(sock);
 			exit(0);
 		}
-		else if(!strncmp(message, "d", 1) && strlen(message) == 2) // 'd'입력 받으면 파일 전송모드로 변경
+		else if(!strncmp(message, "send*", 5) && strlen(message) == 6) // 'send*'입력 받으면 파일 전송모드로 변경
 		{
 			printf("send_file 실행!\n");
-			write(sock, message, strlen(name_message)); 	// 이름 없이 'd'만 전송 // 파일전송 준비 신호
+			write(sock, message, strlen(name_message)); 	// 이름 없이 'send*'만 전송 // 파일전송 준비 신호
 			send_file(sock);				// 파일전송
 		}
 		else
@@ -91,7 +91,6 @@ void send_file(int sock)
 	char filename[20];
 	int sread, filesize, filenamesize, fp;
 	int buf[MAXLINE+1], total=0;
-	int sock_ = sock;
 
 	if(fgets(filename, sizeof(filename), stdin) == NULL)
 		error_handling("File send error(1)");
@@ -104,10 +103,10 @@ void send_file(int sock)
 		error_handling("File send error(2)");
 		exit(0);
 	}
-	send(sock_, filename, sizeof(filename), 0);
+	send(sock, filename, sizeof(filename), 0);
 	filesize = lseek(fp, 0, SEEK_END);
 	
-	send(sock_, &filesize, sizeof(filesize), 0);
+	send(sock, &filesize, sizeof(filesize), 0);
 	lseek(fp, 0, SEEK_SET);
 
         while( total != filesize )
@@ -116,12 +115,12 @@ void send_file(int sock)
        		printf( "file is sending now.. \n" );
       	 	total += sread;
       	 	buf[sread] = 0;
-       		send(sock_, buf, sread, 0 );
+       		send(sock, buf, sread, 0 );
       	 	printf( "processing :%4.2f%% \n", total*100 / (float)filesize );
       	 	usleep(10000);
        	}
 	printf("file transmission is complete\n");
-	printf("filesize : %d, sending : %d\n", filesize, total);	
+	printf("filename : %s, filesize : %d, sending : %d\n", filename, filesize, total);	
 
 	close(fp);
 	total = 0;
@@ -136,7 +135,7 @@ void *recv_message(void* arg)
 	while(1)
 	{
 		str_len = read(sock, name_message, NAMESIZE+BUFSIZE-1);
-		if(strlen(name_message) == 2 && !strncmp(name_message, "d", 1))
+		if(strlen(name_message) == 6 && !strncmp(name_message, "send*", 5))
 		{
 			recv_file(sock);
 		}
@@ -159,20 +158,15 @@ void recv_file(int sock)
 	int filesize, fp;
 	int total=0, sread;
 
-	printf("recv_file(1)\n\n");
         bzero(filename, 30);
-	printf("recv_file(1.5)\n\n");
-        recv(sock, filename, sizeof(filename), 0 );
-	printf("recv_file(2)\n\n");
 
+        recv(sock, filename, sizeof(filename), 0 );
         printf( "%s \n", filename );
 
         read(sock, &filesize, sizeof(filesize) );
         printf( "%d \n", filesize );
-	printf("recv_file(3)\n\n");
 
-        fp = open( filename, O_WRONLY | O_CREAT | O_TRUNC, 0777);
-	printf("recv_file(4)\n\n");
+        fp = open( filename, O_WRONLY | O_CREAT | O_TRUNC, 0644);
 
         while( total != filesize )
         {
@@ -185,9 +179,8 @@ void recv_file(int sock)
                 printf( "processing : %4.2f%% \n", total*100 / (float)filesize );
                 usleep(1000);
         }
-	printf("recv_file(5)\n\n");
         printf( "file traslating is completed \n" );
-        printf( "filesize : %d, received : %d \n", filesize, total );
+        printf( "filename : %s, filesize : %d, received : %d \n", filename, filesize, total );
 
         close(fp);
         total = 0;
