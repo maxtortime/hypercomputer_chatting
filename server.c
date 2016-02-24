@@ -15,7 +15,7 @@
 void *clnt_connection(void *arg);
 void send_message(char *message, int len, int clnt_sock);
 void recv_file(int clnt_sock);
-void send_file(char *filename, int clnt_sock);
+void send_file(int clnt_sock);
 void error_handling(char *message);
 
 int clnt_number = 0;
@@ -82,11 +82,11 @@ void *clnt_connection(void *arg)
 	while((str_len = read(clnt_sock, message, sizeof(message))) != 0)
 	{
 		message[str_len] = 0x00;
-		if(strlen(message) == 2 && !strncmp(message, "d", 1))
+		if(strlen(message) == 6 && !strncmp(message, "send*", 5))
 		{
-			send_message(message, str_len, clnt_sock); // 클라이언트들에게  'd'신호를 보냄으로써 파일 받을 준비를 하게끔 한다.
+			send_message(message, str_len, clnt_sock); // 클라이언트들에게  'send*'신호를 보냄으로써 파일 받을 준비를 하게끔 한다.
 			recv_file(clnt_sock); 
-			send_file(filename, clnt_sock); // 받은 파일을 접속된 클라이언트들에게 모두 뿌려준다.
+			send_file(clnt_sock); // 받은 파일을 접속된 클라이언트들에게 모두 뿌려준다.
 		}
 		else
 		{
@@ -121,14 +121,8 @@ void recv_file(int clnt_sock)
 		
 	bzero(filename, 30);
 	recv(clnt_sock, filename, sizeof(filename), 0 );
-			
-	printf("받은 파일 이름 : %s \n", filename );
-
         read(clnt_sock, &filesize, sizeof(filesize) ); 
-        printf("받은 파일 크기 : %d \n", filesize );
-
-	//fp = open( filename, O_WRONLY | O_CREAT | O_TRUNC, 0666);
-	fp = open( filename, O_RDWR | O_CREAT | O_TRUNC, 0777);
+	fp = open( filename, O_WRONLY | O_CREAT | O_TRUNC, 0644);
 
   	while( total != filesize )
         {
@@ -142,7 +136,7 @@ void recv_file(int clnt_sock)
 	      	usleep(1000);
  	}
 	printf( "file traslating is completed \n" );
-	printf( "filesize : %d, received : %d \n", filesize, total );
+	printf( "filename : %s, filesize : %d, received : %d \n", filename, filesize, total );
 
 	close(fp);
 	total = 0;
@@ -151,33 +145,29 @@ void recv_file(int clnt_sock)
 	strcpy(filename_, filename);
 }
 
-void send_file(char *filename, int clnt_sock)
+void send_file(int clnt_sock)
 {
 	int filenamesize, filesize, fp;
 	int i, sread, total = 0;
 	char buf[MAXLINE+1];
-	char filename_2[30];
-
-	strcpy(filename_2, filename_); 
-	printf("보낼 파일 이름 : %s \n", filename_2);
 
 	for(i=0; i<clnt_number; i++)
 	{
 		if(!(clnt_sock == clnt_socks[i]))
 		{
-		        filenamesize = strlen(filename_2);
-	               	filename_2[filenamesize-1] = 0;
+		        filenamesize = strlen(filename_);
+                	filename_[filenamesize] = 0;
 
-                	if((fp = open(filename_2, O_RDONLY )) < 0)
+                	if( (fp = open( filename_, O_RDONLY )) < 0 )
                 	{
                         	printf( "open failed\n" );
                         	exit(0);
                 	}
-			
-                	send(clnt_sock, filename_2, sizeof(filename_2), 0 );
+
+                	send(clnt_socks[i], filename_, sizeof(filename_), 0 );
                 	filesize = lseek( fp, 0, SEEK_END );
 
-                	send(clnt_sock, &filesize, sizeof(filesize), 0 );
+                	send(clnt_socks[i], &filesize, sizeof(filesize), 0 );
                 	lseek(fp, 0, SEEK_SET );
 
                 	while( total != filesize )
@@ -186,17 +176,16 @@ void send_file(char *filename, int clnt_sock)
                         	printf( "file is sending now.. \n" );
                         	total += sread;
                         	buf[sread] = 0;
-                        	send(clnt_sock, buf, sread, 0 );
+                        	send(clnt_socks[i], buf, sread, 0 );
                         	printf( "processing :%4.2f%% \n", total*100 / (float)filesize );
                         	usleep(10000);
                 	}
-                	printf( "file translating is completed \n" );
-                	printf( "filesize : %d, sending : %d \n", filesize, total );
+                	printf( "file transmission is completed \n" );
+                	printf( "filename : %s, filesize : %d, sending : %d \n", filename_, filesize, total );
 
                 	close(fp);
                 	total = 0;
                 	filesize = 0;
-
 		}	
 	}
 }
